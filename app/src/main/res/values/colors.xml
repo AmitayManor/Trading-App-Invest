@@ -2,4 +2,12 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="background_gray">#CFD8DC</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#424242</color>
+    <color name="positive">#00E676</color>
+    <color name="negative">#B71C1C</color>
+    <color name="natural">#757575</color>
+    <color name="chart_line">#000A12</color>
+    <color name="chart_values">#263238</color>
 </resources>

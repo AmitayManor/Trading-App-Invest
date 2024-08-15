@@ -58,10 +58,20 @@ dependencies {
     //Alpha Vantage Java
     implementation (libs.alphavantage.java)
 
-    // Retrofit for network calls
+    //Retrofit for network calls
     implementation (libs.retrofit)
     implementation (libs.converter.gson)
 
-    // Gson for JSON parsing
+    //Gson for JSON parsing
     implementation (libs.gson)
+
+    //Robolectric for testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.9")
+
+    //Navigation bar
+    implementation ("com.google.android.material:material:1.4.0")
+
+    //Line chart
+    implementation ("com.github.PhilJay:MPAndroidChart:v3.0.3")
 }

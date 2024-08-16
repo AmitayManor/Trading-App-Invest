@@ -54,9 +54,6 @@ public class SellActivity extends AppCompatActivity {
     private List<StockItem> getPortfolioStocks() {
         // TODO: Fetch actual portfolio stocks
         List<StockItem> stocks = new ArrayList<>();
-        stocks.add(new StockItem("AAPL", "Apple Inc.", 150.25, 2.5, 10));
-        stocks.add(new StockItem("GOOGL", "Alphabet Inc.", 2800.75, -0.8, 5));
-        stocks.add(new StockItem("TSLA", "Tesla, Inc.", 900.40, 3.5, 8));
         return stocks;
     }
 
@@ -96,7 +93,8 @@ public class SellActivity extends AppCompatActivity {
         });
 
         plusButton.setOnClickListener(v -> {
-            if (shares.get() < stock.getShares()) {
+            //TODO: implement maximum value instead of hardcoded: 5
+            if (shares.get() < 5) {
                 shares.incrementAndGet();
                 sharesEdit.setText(String.valueOf(shares.get()));
                 updateTotalValue(totalText, shares.get(), stock.getPrice());

@@ -15,9 +15,16 @@ import androidx.appcompat.widget.SearchView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.widget.EditText;
+import android.widget.ProgressBar;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.example.invest.R;
 import com.example.invest.adapters.StockAdapter;
 import com.example.invest.items.StockItem;
+import com.example.invest.handlers.AlphaVantageAPI;
+
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +35,10 @@ public class TradeActivity extends AppCompatActivity {
     private RecyclerView stocksRecyclerView;
     private StockAdapter stockAdapter;
     private SearchView searchView;
+    private ProgressBar loadingIndicator;
+    private EditText symbolEditText;
+    private Button searchButton;
+    private AlphaVantageAPI api;
     private Button buyButton;
     private Button sellButton;
 
@@ -38,20 +49,69 @@ public class TradeActivity extends AppCompatActivity {
 
         initViews();
         setupRecyclerView();
+        api = AlphaVantageAPI.getInstance();
         setupSearchView();
+        setupSearchQueries();
         setupButtons();
         setupBottomNavigation();
+    }
+
+    private void setupSearchQueries() {
+        searchButton.setOnClickListener(v -> {
+            String symbol = symbolEditText.getText().toString().trim().toUpperCase();
+            if (!symbol.isEmpty()) {
+                fetchStockData(symbol);
+            } else {
+                Toast.makeText(this, "Please enter a stock symbol", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void fetchStockData(String symbol) {
+        loadingIndicator.setVisibility(View.VISIBLE);
+        api.getQuote(symbol).thenAccept(quoteResponse -> {
+            StockItem item = new StockItem(
+                    symbol,
+                    //quoteResponse.getName(),
+                    quoteResponse.getPrice(),
+                    quoteResponse.getChange(),
+                    quoteResponse.getChangePercent(),
+                    quoteResponse.getVolume()
+            );
+            runOnUiThread(() -> {
+                List<StockItem> currentStocks = new ArrayList<>(stockAdapter.getStocks());
+                currentStocks.add(0, item);  // Add new item at the top of the list
+                stockAdapter.updateStocks(currentStocks);
+                loadingIndicator.setVisibility(View.GONE);
+                Toast.makeText(TradeActivity.this, "Stock data fetched successfully", Toast.LENGTH_SHORT).show();
+            });
+        }).exceptionally(error -> {
+            runOnUiThread(() -> {
+                loadingIndicator.setVisibility(View.GONE);
+                Toast.makeText(TradeActivity.this, "Error fetching data: " + error.getMessage(), Toast.LENGTH_LONG).show();
+            });
+            return null;
+        });
     }
 
     private void initViews() {
         stocksRecyclerView = findViewById(R.id.stocks_recycler_view);
         searchView = findViewById(R.id.search_view);
+        loadingIndicator = findViewById(R.id.loading_indicator);
+        symbolEditText = findViewById(R.id.symbol_edit_text);
+        searchButton = findViewById(R.id.search_button);
         buyButton = findViewById(R.id.buy_button);
         sellButton = findViewById(R.id.sell_button);
     }
 
     private void setupRecyclerView() {
-        stockAdapter = new StockAdapter(getDummyStocks(), this::showStockDetails);
+        stockAdapter = new StockAdapter(new ArrayList<>(), new StockAdapter.OnStockClickListener(){
+
+            @Override
+            public void onStockClick(StockItem stock) {
+                showStockDetails(stock);
+            }
+        });
         stocksRecyclerView.setAdapter(stockAdapter);
         stocksRecyclerView.setLayoutManager(new LinearLayoutManager(this));
     }
@@ -148,13 +208,9 @@ public class TradeActivity extends AppCompatActivity {
         // or show a progress bar during refresh
     }
 
+    //TODO: delete this function - for tests only
     private List<StockItem> getDummyStocks() {
         List<StockItem> stocks = new ArrayList<>();
-        stocks.add(new StockItem("AAPL", "Apple Inc.", 150.25, 2.5,10));
-        stocks.add(new StockItem("GOOGL", "Alphabet Inc.", 2800.75, -0.8,8));
-        stocks.add(new StockItem("TSLA", "Tesla, Inc.", 900.40, 3.5,7));
-        stocks.add(new StockItem("AMZN", "Amazon.com, Inc.", 3300.00, 1.2,7));
-        stocks.add(new StockItem("MSFT", "Microsoft Corporation", 280.50, 0.5,7));
         return stocks;
     }
 

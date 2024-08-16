@@ -1,5 +1,6 @@
 package com.example.invest.adapters;
 
+import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,7 +37,7 @@ public class StockAdapter extends RecyclerView.Adapter<StockAdapter.StockViewHol
     public void onBindViewHolder(@NonNull StockViewHolder holder, int position) {
         StockItem stock = stocks.get(position);
         holder.symbolTextView.setText(stock.getSymbol());
-        holder.nameTextView.setText(stock.getName());
+        //holder.nameTextView.setText(stock.getName());
         holder.priceTextView.setText(String.format("$%.2f", stock.getPrice()));
         holder.changeTextView.setText(String.format("%.2f%%", stock.getChange()));
         holder.changeTextView.setTextColor(stock.getChange() >= 0 ?
@@ -51,27 +52,29 @@ public class StockAdapter extends RecyclerView.Adapter<StockAdapter.StockViewHol
         return stocks.size();
     }
 
+    public List<StockItem> getStocks() {
+        return stocks;
+    }
+
     public void updateStocks(List<StockItem> newStocks) {
         this.stocks = newStocks;
     }
 
     public static class StockViewHolder extends RecyclerView.ViewHolder {
         TextView symbolTextView;
-        TextView nameTextView;
         TextView priceTextView;
         TextView changeTextView;
 
         public StockViewHolder(@NonNull View itemView) {
             super(itemView);
             symbolTextView = itemView.findViewById(R.id.stock_symbol);
-            nameTextView = itemView.findViewById(R.id.stock_name);
             priceTextView = itemView.findViewById(R.id.stock_price);
             changeTextView = itemView.findViewById(R.id.stock_change);
         }
 
+        @SuppressLint("DefaultLocale")
         void bind(final StockItem stock, final OnStockClickListener listener) {
             symbolTextView.setText(stock.getSymbol());
-            nameTextView.setText(stock.getName());
             priceTextView.setText(String.format("$%.2f", stock.getPrice()));
             changeTextView.setText(String.format("%.2f%%", stock.getChange()));
             changeTextView.setTextColor(stock.getChange() >= 0 ? itemView.getContext().getColor(R.color.positive) : itemView.getContext().getColor(R.color.negative));

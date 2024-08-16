@@ -97,9 +97,9 @@ public class TradeActivity extends AppCompatActivity {
     private void initViews() {
         stocksRecyclerView = findViewById(R.id.stocks_recycler_view);
         searchView = findViewById(R.id.search_view);
-        loadingIndicator = findViewById(R.id.loading_indicator);
-        symbolEditText = findViewById(R.id.symbol_edit_text);
-        searchButton = findViewById(R.id.search_button);
+//        loadingIndicator = findViewById(R.id.loading_indicator);
+//        symbolEditText = findViewById(R.id.symbol_edit_text);
+//        searchButton = findViewById(R.id.search_button);
         buyButton = findViewById(R.id.buy_button);
         sellButton = findViewById(R.id.sell_button);
     }

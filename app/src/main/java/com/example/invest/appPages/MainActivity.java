@@ -10,11 +10,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.content.Intent;
 import android.util.Log;
 import android.view.MenuItem;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.invest.R;
 import com.example.invest.adapters.WatchlistAdapter;
+import com.example.invest.handlers.AlphaVantageAPI;
 import com.example.invest.items.WatchlistItem;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -22,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
+
+    private AlphaVantageAPI api;
 
     private TextView portfolioValueTextView;
     private TextView portfolioChangeTextView;
@@ -33,9 +37,29 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        api = AlphaVantageAPI.getInstance();
+
         initViews();
         setupWatchlist();
         setupBottomNavigation();
+        // Test Connection
+        Button testButton = findViewById(R.id.test_api_button);
+        testButton.setOnClickListener(v -> testApiConnection());
+    }
+
+    // Testing Connection
+    private void testApiConnection() {
+        api.testConnection(new AlphaVantageAPI.ConnectionTestCallback() {
+            @Override
+            public void onSuccess(String message) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show());
+            }
+
+            @Override
+            public void onFailure(String error) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show());
+            }
+        });
     }
 
     private void initViews() {

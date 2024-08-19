@@ -27,10 +27,11 @@ For any queries or suggestions, please open an issue in this repository.
 
 Happy trading with Invest.!
 
-My main errors:
+## My main errors:
 1. AlphaVantage API has a limit of 25 API requests per day. After a single app run i crossed the limits.
 2. Poor communication with the Firebase DB, didnt fetched user's data as expected
 
+Overall the project didnt meet my expections due to a lack of efficient time planning. the overall functionalities are working well bu the final execution isnt working properlly.
   
 Main screen where user can watch a quick lock on his portfolio stats, a progress chart and his watchlist of stocks.
 
@@ -54,7 +55,11 @@ Popup view after clicking a certain stock:
 
 ![image](https://github.com/user-attachments/assets/78e86d2b-d4ba-4b44-a659-6fc42deddd09)
 
+Buy screen where a user can set the amount of stock's shares he desire to buy
+
 ![image](https://github.com/user-attachments/assets/4399ba9e-9ab7-4d43-bc41-d140ae48d3e6)
+
+Sell screen where a user can set the amount of owned shares of stock he desire to sell
 
 ![image](https://github.com/user-attachments/assets/a56e4a01-dc2f-4e5d-86be-6ae68556eb05)
 

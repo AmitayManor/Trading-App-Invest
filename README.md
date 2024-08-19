@@ -33,7 +33,7 @@ Happy trading with Invest.!
 
 Overall the project didnt meet my expections due to a lack of efficient time planning. the overall functionalities are working well bu the final execution isnt working properlly.
 
-## App walkthrough
+## App Walkthrough
 Main screen where user can watch a quick lock on his portfolio stats, a progress chart and his watchlist of stocks.
 
 ![image](https://github.com/user-attachments/assets/6bf9e99d-bd54-4640-bcd7-bb139e8fa5bb)

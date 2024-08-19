@@ -7,7 +7,6 @@ Invest. is an Android application designed for stock trading and financial manag
 - **Real-time Stock Tracking**: Monitor stock prices and view historical data with interactive charts.
 - **Trading Simulation**: Buy and sell stocks with a simulated balance.
 - **Portfolio Management**: Track your investments and analyze your portfolio performance.
-- **Financial News Feed**: Stay updated with the latest market news and financial articles.
 
 ## Tech Stack
 

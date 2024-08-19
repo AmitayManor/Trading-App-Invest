@@ -10,4 +10,5 @@
     <color name="natural">#757575</color>
     <color name="chart_line">#000A12</color>
     <color name="chart_values">#263238</color>
+    <color name="ApproveAction">#F57C00</color>
 </resources>

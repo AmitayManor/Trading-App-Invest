@@ -7,6 +7,8 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
 import java.util.List;
 
 import com.example.invest.items.StockItem;
@@ -33,18 +35,11 @@ public class StockAdapter extends RecyclerView.Adapter<StockAdapter.StockViewHol
         return new StockViewHolder(view);
     }
 
+    @SuppressLint("DefaultLocale")
     @Override
     public void onBindViewHolder(@NonNull StockViewHolder holder, int position) {
         StockItem stock = stocks.get(position);
-        holder.symbolTextView.setText(stock.getSymbol());
-        //holder.nameTextView.setText(stock.getName());
-        holder.priceTextView.setText(String.format("$%.2f", stock.getPrice()));
-        holder.changeTextView.setText(String.format("%.2f%%", stock.getChange()));
-        holder.changeTextView.setTextColor(stock.getChange() >= 0 ?
-                holder.itemView.getContext().getColor(R.color.positive) :
-                holder.itemView.getContext().getColor(R.color.negative));
-
-        holder.itemView.setOnClickListener(v -> listener.onStockClick(stock));
+        holder.bind(stock, listener);
     }
 
     @Override
@@ -52,24 +47,31 @@ public class StockAdapter extends RecyclerView.Adapter<StockAdapter.StockViewHol
         return stocks.size();
     }
 
+//    public List<StockItem> getStocks() {
+//        return new ArrayList<>(stocks);
+//    }
     public List<StockItem> getStocks() {
         return stocks;
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     public void updateStocks(List<StockItem> newStocks) {
         this.stocks = newStocks;
+        notifyDataSetChanged();
     }
 
     public static class StockViewHolder extends RecyclerView.ViewHolder {
         TextView symbolTextView;
         TextView priceTextView;
         TextView changeTextView;
+        TextView volumeTextView;
 
         public StockViewHolder(@NonNull View itemView) {
             super(itemView);
             symbolTextView = itemView.findViewById(R.id.stock_symbol);
             priceTextView = itemView.findViewById(R.id.stock_price);
             changeTextView = itemView.findViewById(R.id.stock_change);
+            volumeTextView = itemView.findViewById(R.id.stock_volume);
         }
 
         @SuppressLint("DefaultLocale")
@@ -78,6 +80,7 @@ public class StockAdapter extends RecyclerView.Adapter<StockAdapter.StockViewHol
             priceTextView.setText(String.format("$%.2f", stock.getPrice()));
             changeTextView.setText(String.format("%.2f%%", stock.getChange()));
             changeTextView.setTextColor(stock.getChange() >= 0 ? itemView.getContext().getColor(R.color.positive) : itemView.getContext().getColor(R.color.negative));
+            volumeTextView.setText(String.format("Vol: %.2f", stock.getVolume()));
 
             itemView.setOnClickListener(v -> listener.onStockClick(stock));
         }

@@ -49,8 +49,8 @@ dependencies {
     //Auth UI
     implementation (libs.firebase.ui.auth)
     implementation(libs.firebase.auth)
-    //implementation(libs.play.services.auth)
-    implementation(libs.play.services.auth.v2120) // If sign in with google not working use libs.play.services.auth (version 20.0.7)
+    implementation(libs.play.services.auth)
+    //implementation(libs.play.services.auth.v2120) // If sign in with google not working use libs.play.services.auth (version 20.0.7)
 
     //Real-Time DB
     implementation(libs.firebase.database)
@@ -65,13 +65,11 @@ dependencies {
     //Gson for JSON parsing
     implementation (libs.gson)
 
-    //Robolectric for testing
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.9")
-
     //Navigation bar
-    implementation ("com.google.android.material:material:1.4.0")
+    implementation (libs.material.v140)
 
     //Line chart
-    implementation ("com.github.PhilJay:MPAndroidChart:v3.0.3")
+    implementation (libs.mpandroidchart)
+
+
 }

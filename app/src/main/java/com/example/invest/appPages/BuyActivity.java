@@ -1,139 +1,184 @@
 package com.example.invest.appPages;
 
+import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.invest.R;
-import com.example.invest.adapters.StockAdapter;
-import com.example.invest.items.StockItem;
+import com.example.invest.handlers.AlphaVantageAPI;
+import com.example.invest.handlers.FirebaseManager;
+import com.example.invest.models.UserPortfolio;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class BuyActivity extends AppCompatActivity {
 
-    private SearchView searchView;
-    private RecyclerView portfolioRecyclerView;
-    private Button cancelButton;
-    private StockAdapter stockAdapter;
+    private TextView stockSymbolView, stockPriceView, stockChangeView, totalValueView;
+    private EditText sharesEdit;
+    private Button minusButton, plusButton, approveButton, cancelButton;
+    private String stockSymbol;
+    private AtomicReference<Double> stockPrice = new AtomicReference<>(0.0);
+    private FirebaseManager firebaseManager;
+    private FirebaseAuth mAuth;
+    private AlphaVantageAPI api;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_buy);
 
+        firebaseManager = FirebaseManager.getInstance();
+        mAuth = FirebaseAuth.getInstance();
+        api = AlphaVantageAPI.getInstance();
+
         initViews();
-        setupRecyclerView();
-        setupSearchView();
-        setupCancelButton();
+        setupQuantityControls();
+        setupButtons();
+        loadStockData();
     }
 
     private void initViews() {
-        searchView = findViewById(R.id.search_view);
-        portfolioRecyclerView = findViewById(R.id.portfolio_recycler_view);
+        stockSymbolView = findViewById(R.id.stock_symbol);
+        stockPriceView = findViewById(R.id.stock_price);
+        stockChangeView = findViewById(R.id.stock_change);
+        totalValueView = findViewById(R.id.total_value);
+        sharesEdit = findViewById(R.id.shares_edit);
+        minusButton = findViewById(R.id.minus_button);
+        plusButton = findViewById(R.id.plus_button);
+        approveButton = findViewById(R.id.approve_button);
         cancelButton = findViewById(R.id.cancel_button);
     }
 
-    private void setupRecyclerView() {
-        stockAdapter = new StockAdapter(getPortfolioStocks(), this::showBuyDialog);
-        portfolioRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-        portfolioRecyclerView.setAdapter(stockAdapter);
-    }
-
-    private void setupSearchView() {
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                // TODO: Implement stock search
-                return false;
-            }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                // TODO: Implement real-time filtering
-                return false;
-            }
+    @SuppressLint("DefaultLocale")
+    private void loadStockData(){
+        stockSymbol = getIntent().getStringExtra("STOCK_SYMBOL");
+        if (stockSymbol == null) {
+            Toast.makeText(this, "Error: No stock symbol provided", Toast.LENGTH_LONG).show();
+            transactToTradeActivity();
+        }
+        api.getQuote(stockSymbol).thenAccept(quoteResponse -> {
+            stockPrice.set(quoteResponse.getPrice());
+            runOnUiThread(() -> {
+                stockSymbolView.setText(stockSymbol);
+                stockPriceView.setText(String.format("$%.2f", quoteResponse.getPrice()));
+                stockChangeView.setText(String.format("%.2f%%", quoteResponse.getChangePercent()));
+                stockChangeView.setTextColor(quoteResponse.getChangePercent() >= 0 ? getColor(R.color.positive) : getColor(R.color.negative));
+                updateTotalValue();
+            });
+        }).exceptionally(error -> {
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Error fetching stock data: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                finish();
+            });
+            return null;
         });
     }
 
-    private void setupCancelButton() {
-        cancelButton.setOnClickListener(v -> finish());
-    }
-
-    private List<StockItem> getPortfolioStocks() {
-        // TODO: Fetch actual portfolio stocks
-        List<StockItem> stocks = new ArrayList<>();
-        stocks.add(new StockItem("AAPL", "Apple Inc.", 150.25, 2.5, 10));
-        stocks.add(new StockItem("GOOGL", "Alphabet Inc.", 2800.75, -0.8, 5));
-        stocks.add(new StockItem("TSLA", "Tesla, Inc.", 900.40, 3.5, 8));
-        return stocks;
-    }
-
-    private void showBuyDialog(StockItem stock) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View view = getLayoutInflater().inflate(R.layout.dialog_buy_sell, null);
-
-        TextView symbolText = view.findViewById(R.id.stock_symbol);
-        TextView priceText = view.findViewById(R.id.stock_price);
-        TextView changeText = view.findViewById(R.id.stock_change);
-        TextView totalText = view.findViewById(R.id.total_value);
-        EditText sharesEdit = view.findViewById(R.id.shares_edit);
-        Button minusButton = view.findViewById(R.id.minus_button);
-        Button plusButton = view.findViewById(R.id.plus_button);
-        Button buyButton = view.findViewById(R.id.action_button);
-        Button cancelButton = view.findViewById(R.id.cancel_button);
-
-        symbolText.setText(stock.getSymbol());
-        priceText.setText(String.format("$%.2f", stock.getPrice()));
-        changeText.setText(String.format("%.2f%%", stock.getChange()));
-        changeText.setTextColor(stock.getChange() >= 0 ? getColor(R.color.positive) : getColor(R.color.negative));
-
-        AtomicInteger shares = new AtomicInteger(1);
-        sharesEdit.setText(String.valueOf(shares.get()));
-
-        updateTotalValue(totalText, shares.get(), stock.getPrice());
-
-        builder.setView(view);
-        final AlertDialog dialog = builder.create();
+    private void setupQuantityControls() {
+        sharesEdit.setText("1");
 
         minusButton.setOnClickListener(v -> {
-            if (shares.get() > 1) {
-                shares.decrementAndGet();
-                sharesEdit.setText(String.valueOf(shares.get()));
-                updateTotalValue(totalText, shares.get(), stock.getPrice());
+            int currentShares = Integer.parseInt(sharesEdit.getText().toString());
+            if (currentShares > 1) {
+                sharesEdit.setText(String.valueOf(currentShares - 1));
+                updateTotalValue();
             }
         });
 
         plusButton.setOnClickListener(v -> {
-            shares.incrementAndGet();
-            sharesEdit.setText(String.valueOf(shares.get()));
-            updateTotalValue(totalText, shares.get(), stock.getPrice());
+            int currentShares = Integer.parseInt(sharesEdit.getText().toString());
+            sharesEdit.setText(String.valueOf(currentShares + 1));
+            updateTotalValue();
         });
 
-        buyButton.setText("Buy");
-        buyButton.setOnClickListener(v -> {
-            // TODO: Implement buy confirmation
-            Toast.makeText(this, "Bought " + shares.get() + " shares of " + stock.getSymbol(), Toast.LENGTH_SHORT).show();
+        sharesEdit.setOnEditorActionListener((v, actionId, event) -> {
+            updateTotalValue();
+            return false;
         });
-
-        cancelButton.setOnClickListener(v -> dialog.dismiss());
-
-        dialog.show();
     }
 
-    private void updateTotalValue(TextView totalText, int shares, double price) {
-        double total = shares * price;
-        totalText.setText(String.format("Total: $%.2f", total));
+    private void setupButtons() {
+        approveButton.setOnClickListener(v -> showConfirmationDialog());
+        cancelButton.setOnClickListener(v -> transactToTradeActivity());
     }
+
+    @SuppressLint("DefaultLocale")
+    private void updateTotalValue() {
+        int shares = Integer.parseInt(sharesEdit.getText().toString());
+        double total = shares * stockPrice.get();
+        totalValueView.setText(String.format("Total: $%.2f", total));
+    }
+
+    private void showConfirmationDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Confirm Purchase")
+                .setMessage("Are you sure you want to make this purchase?")
+                .setPositiveButton("Yes, I'm sure", (dialog, which) -> makePurchase())
+                .setNegativeButton("No, I'm not sure", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    private void makePurchase() {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "Error: User not logged in", Toast.LENGTH_LONG).show();
+            transactToLoginActivity();
+            return;
+        }
+
+        String userId = currentUser.getUid();
+        int shares = Integer.parseInt(sharesEdit.getText().toString());
+        double totalCost = shares * stockPrice.get();
+
+        firebaseManager.getUserPortfolio(userId).thenAccept(userPortfolio -> {
+            if (userPortfolio.getCashBalance() >= totalCost) {
+                userPortfolio.setCashBalance(userPortfolio.getCashBalance() - totalCost);
+                userPortfolio.updateInitialInvestment(totalCost);
+                UserPortfolio.Holdings holdings = userPortfolio.getHoldings().getOrDefault(stockSymbol, new UserPortfolio.Holdings());
+                int newQuantity = holdings.getQuantity() + shares;
+                double newAveragePrice = (holdings.getQuantity() * holdings.getAveragePrice() + totalCost) / newQuantity;
+                holdings.setQuantity(newQuantity);
+                holdings.setAveragePrice(newAveragePrice);
+                userPortfolio.getHoldings().put(stockSymbol, holdings);
+
+                firebaseManager.updateUserPortfolio(userPortfolio).thenRun(() -> {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Purchase successful", Toast.LENGTH_LONG).show();
+                        finish();
+                    });
+                }).exceptionally(error -> {
+                    runOnUiThread(() -> Toast.makeText(this, "Error updating portfolio: " + error.getMessage(), Toast.LENGTH_LONG).show());
+                    return null;
+                });
+            } else {
+                runOnUiThread(() -> Toast.makeText(this, "Insufficient funds", Toast.LENGTH_LONG).show());
+            }
+        }).exceptionally(error -> {
+            runOnUiThread(() -> Toast.makeText(this, "Error fetching user portfolio: " + error.getMessage(), Toast.LENGTH_LONG).show());
+            return null;
+        });
+    }
+
+
+   private void transactToTradeActivity(){
+       Intent intent = new Intent(getApplicationContext(), TradeActivity.class);
+       startActivity(intent);
+       finish();
+   }
+
+    private void transactToLoginActivity(){
+        Intent intent = new Intent(getApplicationContext(), LoginActivity.class);
+        startActivity(intent);
+        finish();
+    }
+
 }

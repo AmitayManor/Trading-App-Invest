@@ -1,5 +1,6 @@
 package com.example.invest.adapters;
 
+import android.annotation.SuppressLint;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.invest.R;
 import com.example.invest.models.PortfolioHolding;
+import com.example.invest.models.UserPortfolio;
 
 import java.util.List;
 
@@ -18,6 +20,13 @@ public class PortfolioAdapter extends RecyclerView.Adapter<PortfolioAdapter.View
 
     public PortfolioAdapter(List<PortfolioHolding> holdings) {
         this.holdings = holdings;
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    public void updateHoldings(List<PortfolioHolding> newHoldings) {
+        this.holdings.clear();
+        this.holdings.addAll(newHoldings);
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -40,7 +49,6 @@ public class PortfolioAdapter extends RecyclerView.Adapter<PortfolioAdapter.View
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         TextView symbolTextView;
-        TextView nameTextView;
         TextView sharesTextView;
         TextView valueTextView;
         TextView changeTextView;
@@ -49,21 +57,20 @@ public class PortfolioAdapter extends RecyclerView.Adapter<PortfolioAdapter.View
         ViewHolder(View itemView) {
             super(itemView);
             symbolTextView = itemView.findViewById(R.id.holding_symbol);
-            nameTextView = itemView.findViewById(R.id.holding_name);
             sharesTextView = itemView.findViewById(R.id.holding_shares);
             valueTextView = itemView.findViewById(R.id.holding_value);
             changeTextView = itemView.findViewById(R.id.holding_change);
             percentageTextView = itemView.findViewById(R.id.holding_percentage);
         }
 
+        @SuppressLint("DefaultLocale")
         void bind(PortfolioHolding holding) {
             symbolTextView.setText(holding.getSymbol());
-            nameTextView.setText(holding.getName());
             sharesTextView.setText(String.format("%d shares", holding.getShares()));
             valueTextView.setText(String.format("$%.2f", holding.getTotalValue()));
             changeTextView.setText(String.format("%.2f%%", holding.getChange()));
             changeTextView.setTextColor(holding.getChange() >= 0 ? itemView.getContext().getColor(R.color.positive) : itemView.getContext().getColor(R.color.negative));
-            percentageTextView.setText(String.format("%.1f%% of portfolio", holding.getPortfolioPercentage()));
+            percentageTextView.setText(String.format("%.2f%% of portfolio", holding.getPortfolioPercentage()));
         }
     }
 }

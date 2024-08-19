@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 public class StockItem {
     private String symbol;
-    //private String name;
     private double price;
     private double change;
     private double changePercent;
@@ -13,7 +12,6 @@ public class StockItem {
 
     public StockItem(String symbol, double price, double change, double changePercent, double volume) {
         this.symbol = symbol;
-       // this.name = name;
         this.price = price;
         this.change = change;
         this.changePercent = changePercent;
@@ -23,7 +21,6 @@ public class StockItem {
 
     // Getters
     public String getSymbol() { return symbol; }
-    //public String getName() { return name; }
     public double getPrice() { return price; }
     public double getChange() { return change; }
     public double getChangePercent() { return changePercent; }
@@ -52,7 +49,6 @@ public class StockItem {
     public String toString() {
         return "StockItem{" +
                 "symbol='" + symbol + '\'' +
-//                ", name='" + name + '\'' +
                 ", price=" + price +
                 ", change=" + change +
                 ", changePercent=" + changePercent +

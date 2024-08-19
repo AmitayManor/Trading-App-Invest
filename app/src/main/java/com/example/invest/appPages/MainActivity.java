@@ -1,16 +1,19 @@
 package com.example.invest.appPages;
 
-
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import android.content.Intent;
 import android.util.Log;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -18,61 +21,257 @@ import com.example.invest.R;
 import com.example.invest.adapters.WatchlistAdapter;
 import com.example.invest.handlers.AlphaVantageAPI;
 import com.example.invest.items.WatchlistItem;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.FirebaseApp;
+import com.example.invest.handlers.FirebaseManager;
+import com.example.invest.models.UserPortfolio;
+import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MainActivity extends AppCompatActivity {
 
-    private AlphaVantageAPI api;
-
+    private AlphaVantageAPI alphaVantageAPI;
+    private FirebaseManager firebaseManager;
     private TextView portfolioValueTextView;
     private TextView portfolioChangeTextView;
     private RecyclerView watchlistRecyclerView;
     private WatchlistAdapter watchlistAdapter;
+    private LineChart performanceChart;
+    private FirebaseAuth mAuth;
+    private ProgressBar loadingIndicator;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        api = AlphaVantageAPI.getInstance();
+
+        mAuth = FirebaseAuth.getInstance();
+        alphaVantageAPI = AlphaVantageAPI.getInstance();
+        firebaseManager = FirebaseManager.getInstance();
 
         initViews();
         setupWatchlist();
         setupBottomNavigation();
-        // Test Connection
-        Button testButton = findViewById(R.id.test_api_button);
-        testButton.setOnClickListener(v -> testApiConnection());
+        loadUserData();
+        loadWatchlistData();
     }
 
-    // Testing Connection
-    private void testApiConnection() {
-        api.testConnection(new AlphaVantageAPI.ConnectionTestCallback() {
-            @Override
-            public void onSuccess(String message) {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show());
-            }
+    private void loadUserData() {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser != null) {
+            String userId = currentUser.getUid();
+            firebaseManager.getUserPortfolio(userId)
+                    .thenAccept(this::updateUI)
+                    .exceptionally(error -> {
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error loading user data: " + error.getMessage(), Toast.LENGTH_LONG).show());
+                        return null;
+                    });
+        } else {
+            Toast.makeText(this, "No user logged in", Toast.LENGTH_LONG).show();
+            transactToLoginActivity();
+        }
+    }
 
-            @Override
-            public void onFailure(String error) {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show());
-            }
-        });
+    private void transactToLoginActivity() {
+        Intent intent = new Intent(getApplicationContext(), LoginActivity.class);
+        startActivity(intent);
+        finish();
     }
 
     private void initViews() {
         portfolioValueTextView = findViewById(R.id.portfolio_value);
         portfolioChangeTextView = findViewById(R.id.portfolio_change);
         watchlistRecyclerView = findViewById(R.id.watchlist_recycler_view);
+        performanceChart = findViewById(R.id.performance_chart);
     }
 
     private void setupWatchlist() {
-        watchlistAdapter = new WatchlistAdapter(getWatchlistData());
+        watchlistAdapter = new WatchlistAdapter(new ArrayList<>());
         watchlistRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         watchlistRecyclerView.setAdapter(watchlistAdapter);
     }
+
+    private void updateUI(UserPortfolio userPortfolio) {
+        if (userPortfolio != null) {
+            updatePortfolioValue(userPortfolio);
+            setupPerformanceChart(userPortfolio);
+            updateWatchlist(userPortfolio);
+        } else {
+            Toast.makeText(this, "Failed to load portfolio data", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void setupPerformanceChart(UserPortfolio userPortfolio) {
+        loadingIndicator.setVisibility(View.VISIBLE);
+
+        // Get the symbols of all stocks in the portfolio
+        List<String> symbols = new ArrayList<>(userPortfolio.getHoldings().keySet());
+
+        if (symbols.isEmpty()) {
+            runOnUiThread(() -> {
+                loadingIndicator.setVisibility(View.GONE);
+                performanceChart.setNoDataText("No stocks in portfolio");
+                performanceChart.invalidate();
+            });
+            return;
+        }
+
+        List<CompletableFuture<List<AlphaVantageAPI.WeeklyAdjustedData>>> futures = new ArrayList<>();
+
+        for (String symbol : symbols) {
+            futures.add(alphaVantageAPI.getWeeklyAdjusted(symbol));
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenAccept(v -> {
+                    List<Entry> entries = new ArrayList<>();
+                    List<String> labels = new ArrayList<>();
+                    Map<String, Float> latestValues = new HashMap<>();
+
+                    for (int i = 0; i < futures.size(); i++) {
+                        try {
+                            List<AlphaVantageAPI.WeeklyAdjustedData> weeklyData = futures.get(i).get();
+                            if (!weeklyData.isEmpty()) {
+                                latestValues.put(symbols.get(i), weeklyData.get(0).getAdjustedClose().floatValue());
+                            }
+                        } catch (InterruptedException | ExecutionException e) {
+                            Log.e("MainActivity", "Error fetching data for " + symbols.get(i), e);
+                        }
+                    }
+
+                    // Calculate portfolio value for each week
+                    for (int week = 0; week < 12; week++) {
+                        float weekValue = 0;
+                        for (int i = 0; i < futures.size(); i++) {
+                            try {
+                                List<AlphaVantageAPI.WeeklyAdjustedData> weeklyData = futures.get(i).get();
+                                if (week < weeklyData.size()) {
+                                    AlphaVantageAPI.WeeklyAdjustedData data = weeklyData.get(week);
+                                    float stockValue = data.getAdjustedClose().floatValue() * userPortfolio.getHoldings().get(symbols.get(i)).getQuantity();
+                                    weekValue += stockValue;
+                                }
+                            } catch (InterruptedException | ExecutionException e) {
+                                Log.e("MainActivity", "Error calculating portfolio value", e);
+                            }
+                        }
+                        entries.add(new Entry(week, weekValue));
+                        labels.add("Week " + (week + 1));
+                    }
+
+                    runOnUiThread(() -> {
+                        loadingIndicator.setVisibility(View.GONE);
+                        LineDataSet dataSet = new LineDataSet(entries, "Portfolio Performance");
+                        dataSet.setColor(getColor(R.color.chart_line));
+                        dataSet.setValueTextColor(getColor(R.color.chart_values));
+                        dataSet.setDrawValues(false);
+                        dataSet.setDrawCircles(false);
+
+                        LineData lineData = new LineData(dataSet);
+                        performanceChart.setData(lineData);
+
+                        XAxis xAxis = performanceChart.getXAxis();
+                        xAxis.setValueFormatter(new IndexAxisValueFormatter(labels));
+                        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+                        xAxis.setGranularity(1f);
+                        xAxis.setLabelRotationAngle(45);
+
+                        performanceChart.getDescription().setEnabled(false);
+                        performanceChart.getLegend().setEnabled(false);
+                        performanceChart.invalidate();
+                    });
+                })
+                .exceptionally(throwable -> {
+                    runOnUiThread(() -> {
+                        loadingIndicator.setVisibility(View.GONE);
+                        Toast.makeText(MainActivity.this, "Error loading performance data: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+                    return null;
+                });
+    }
+
+
+
+//    @SuppressLint("DefaultLocale")
+//    private void setupPortfolioSummary(UserPortfolio userPortfolio) {
+//        double totalValue = userPortfolio.getTotalPortfolioValue();
+//        double cashBalance = userPortfolio.getCashBalance();
+//        double investedValue = totalValue - cashBalance;
+//        double change = investedValue > 0 ? ((totalValue - cashBalance) / investedValue - 1) * 100 : 0;
+//
+//        runOnUiThread(() -> {
+//            portfolioValueTextView.setText(String.format("$%.2f", totalValue));
+//            portfolioChangeTextView.setText(String.format("%.2f%%", change));
+//            portfolioChangeTextView.setTextColor(change >= 0 ? getColor(R.color.positive) : getColor(R.color.negative));
+//        });
+//    }
+
+@SuppressLint("DefaultLocale")
+private void updatePortfolioValue(UserPortfolio userPortfolio) {
+    loadingIndicator.setVisibility(View.VISIBLE);
+
+    List<CompletableFuture<Double>> futures = new ArrayList<>();
+
+    for (Map.Entry<String, UserPortfolio.Holdings> entry : userPortfolio.getHoldings().entrySet()) {
+        String symbol = entry.getKey();
+        int quantity = entry.getValue().getQuantity();
+
+        CompletableFuture<Double> future = alphaVantageAPI.getQuote(symbol)
+                .thenApply(quote -> quote.getPrice() * quantity);
+
+        futures.add(future);
+    }
+
+    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+            .thenApply(v -> {
+                double totalValue = userPortfolio.getCashBalance();
+                for (CompletableFuture<Double> future : futures) {
+                    try {
+                        totalValue += future.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                        Log.e("MainActivity", "Error calculating portfolio value", e);
+                    }
+                }
+                return totalValue;
+            })
+            .thenAccept(totalValue -> {
+                double initialInvestment = userPortfolio.getInitialInvestment();
+                double totalChange = totalValue - initialInvestment;
+                double totalChangePercent = (totalChange / initialInvestment) * 100;
+
+                runOnUiThread(() -> {
+                    loadingIndicator.setVisibility(View.GONE);
+                    portfolioValueTextView.setText(String.format("$%.2f", totalValue));
+                    portfolioChangeTextView.setText(String.format("%.2f%% (%.2f)", totalChangePercent, totalChange));
+                    portfolioChangeTextView.setTextColor(totalChange >= 0 ? getColor(R.color.positive) : getColor(R.color.negative));
+                });
+            })
+            .exceptionally(throwable -> {
+                runOnUiThread(() -> {
+                    loadingIndicator.setVisibility(View.GONE);
+                    Toast.makeText(MainActivity.this, "Error updating portfolio value: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                });
+                return null;
+            });
+}
+
 
     private void setupBottomNavigation() {
         BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation);
@@ -83,11 +282,6 @@ public class MainActivity extends AppCompatActivity {
                 if (itemId == R.id.nav_home) {
 
                     refreshHomePage();
-                    return true;
-                } else if (itemId == R.id.nav_news) {
-                    // Navigate to News Activity
-                    Intent newsIntent = new Intent(MainActivity.this, NewsActivity.class);
-                    startActivity(newsIntent);
                     return true;
                 } else if (itemId == R.id.nav_trade) {
                     // Navigate to Trade Activity
@@ -105,71 +299,104 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+
     private void refreshHomePage() {
-        // Refresh portfolio value
-        updatePortfolioValue();
-
-        // Refresh performance chart
-        updatePerformanceChart();
-
-        // Refresh watchlist
-        updateWatchlist();
-
-        // Optional: Show a refresh animation or message
-        showRefreshIndicator();
+        watchlistAdapter.clearItems();
+        loadUserData();
     }
 
-    private void updatePortfolioValue() {
-        // TODO: Fetch the latest portfolio value from your data source
-        // For now, we'll just update with a random value
-        double newValue = 10000 + Math.random() * 1000;
-        TextView portfolioValueTextView = findViewById(R.id.portfolio_value);
-        portfolioValueTextView.setText(String.format("$%.2f", newValue));
 
-        // Update change percentage
-        double changePercentage = (Math.random() * 10) - 5; // Random value between -5% and 5%
-        TextView portfolioChangeTextView = findViewById(R.id.portfolio_change);
-        portfolioChangeTextView.setText(String.format("%.2f%%", changePercentage));
-        portfolioChangeTextView.setTextColor(changePercentage >= 0 ? getColor(R.color.positive) : getColor(R.color.negative));
-    }
+    private void updateWatchlist(UserPortfolio userPortfolio) {
+        loadingIndicator.setVisibility(View.VISIBLE);
+        List<String> watchlist = userPortfolio.getWatchlist();
 
-    private void updatePerformanceChart() {
-        // TODO: Update the performance chart with the latest data
-        // This will depend on how you've implemented your chart
-        // For now, we'll just log a message
-        Log.d("MainActivity", "Updating performance chart");
-    }
-
-    private void updateWatchlist() {
-        // TODO: Fetch the latest watchlist data from your data source
-        // For now, we'll just update the existing items with random values
-        WatchlistAdapter adapter = (WatchlistAdapter) watchlistRecyclerView.getAdapter();
-        if (adapter != null) {
-            List<WatchlistItem> items = adapter.getWatchlistItems();
-            for (WatchlistItem item : items) {
-                double newPrice = item.getPrice() * (1 + (Math.random() * 0.1 - 0.05)); // ±5% change
-                double newChange = (Math.random() * 10) - 5; // Random value between -5% and 5%
-                item.setPrice(newPrice);
-                item.setChange(newChange);
-            }
-            adapter.notifyDataSetChanged();
+        if (watchlist == null || watchlist.isEmpty()) {
+            runOnUiThread(() -> {
+                loadingIndicator.setVisibility(View.GONE);
+                watchlistAdapter.clearItems();
+                Toast.makeText(MainActivity.this, "Watchlist is empty", Toast.LENGTH_SHORT).show();
+            });
+            return;
         }
+
+        List<CompletableFuture<WatchlistItem>> futures = new ArrayList<>();
+
+        for (String symbol : watchlist) {
+            CompletableFuture<WatchlistItem> future = alphaVantageAPI.getQuote(symbol)
+                    .thenApply(quote -> new WatchlistItem(
+                            symbol,
+                            quote.getPrice(),
+                            quote.getChangePercent()
+                    ));
+
+            futures.add(future);
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenApply(v -> {
+                    List<WatchlistItem> items = new ArrayList<>();
+                    for (CompletableFuture<WatchlistItem> future : futures) {
+                        try {
+                            items.add(future.get());
+                        } catch (InterruptedException | ExecutionException e) {
+                            Log.e("MainActivity", "Error fetching watchlist item", e);
+                        }
+                    }
+                    return items;
+                })
+                .thenAccept(items -> {
+                    runOnUiThread(() -> {
+
+                        loadingIndicator.setVisibility(View.GONE);
+                        watchlistAdapter.updateItems(items);
+                    });
+                })
+                .exceptionally(throwable -> {
+                    runOnUiThread(() -> {
+                        loadingIndicator.setVisibility(View.GONE);
+                        Toast.makeText(MainActivity.this, "Error updating watchlist: " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+                    return null;
+                });
     }
 
-    private void showRefreshIndicator() {
-        // Show a short toast message
-        Toast.makeText(this, "Refreshing data...", Toast.LENGTH_SHORT).show();
+    private void loadWatchlistData() {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "User not logged in", Toast.LENGTH_SHORT).show();
+            transactToLoginActivity();
+        }
 
-        // Optional: You could also implement a pull-to-refresh functionality
-        // or show a progress bar during refresh
-    }
+        String userId = currentUser.getUid();
+        firebaseManager.getUserPortfolio(userId)
+                .thenAccept(userPortfolio -> {
+                    List<String> watchlist = userPortfolio.getWatchlist();
+                    if (watchlist == null || watchlist.isEmpty()) {
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Watchlist is empty", Toast.LENGTH_SHORT).show());
+                        return;
+                    }
 
-    private List<WatchlistItem> getWatchlistData() {
-        // TODO: Replace with actual data from your data source
-        List<WatchlistItem> watchlistItems = new ArrayList<>();
-        watchlistItems.add(new WatchlistItem("AAPL", 150.25, 1.2));
-        watchlistItems.add(new WatchlistItem("GOOGL", 2800.75, -0.8));
-        watchlistItems.add(new WatchlistItem("TSLA", 900.40, 3.5));
-        return watchlistItems;
+                    for (String symbol : watchlist) {
+                        alphaVantageAPI.getQuote(symbol)
+                                .thenAccept(quote -> {
+                                    WatchlistItem item = new WatchlistItem(
+                                            symbol,
+                                            quote.getPrice(),
+                                            quote.getChangePercent()
+                                    );
+                                    runOnUiThread(() -> watchlistAdapter.addItem(item));
+                                })
+                                .exceptionally(error -> {
+                                    runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                                            "Error fetching data for " + symbol, Toast.LENGTH_SHORT).show());
+                                    return null;
+                                });
+                    }
+                })
+                .exceptionally(error -> {
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                            "Error loading watchlist: " + error.getMessage(), Toast.LENGTH_LONG).show());
+                    return null;
+                });
     }
 }

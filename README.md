@@ -27,12 +27,6 @@ For any queries or suggestions, please open an issue in this repository.
 
 Happy trading with Invest.!
 
-## My main errors:
-1. AlphaVantage API has a limit of 25 API requests per day. After a single app run i crossed the limits.
-2. Poor communication with the Firebase DB, didnt fetched user's data as expected
-
-Overall the project didnt meet my expections due to a lack of efficient time planning. the overall functionalities are working well bu the final execution isnt working properlly.
-
 ## App Walkthrough
 Main screen where user can watch a quick lock on his portfolio stats, a progress chart and his watchlist of stocks.
 
